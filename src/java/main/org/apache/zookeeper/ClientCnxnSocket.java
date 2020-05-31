@@ -52,8 +52,8 @@ abstract class ClientCnxnSocket {
     protected final ByteBuffer lenBuffer = ByteBuffer.allocateDirect(4);
 
     /**
-     * After the length is read, a new incomingBuffer is allocated in
-     * readLength() to receive the full message.
+     * 读取socket消息
+     *
      */
     protected ByteBuffer incomingBuffer = lenBuffer;
     protected long sentCount = 0;
@@ -61,11 +61,13 @@ abstract class ClientCnxnSocket {
     protected long lastHeard;
     protected long lastSend;
     protected long now;
+    /**
+     * 消息处理线程
+     */
     protected ClientCnxn.SendThread sendThread;
 
     /**
-     * The sessionId is only available here for Log and Exception messages.
-     * Otherwise the socket doesn't need to know it.
+     * 会话id
      */
     protected long sessionId;
 
@@ -102,6 +104,9 @@ abstract class ClientCnxnSocket {
         this.lastSend = now;
     }
 
+    /**
+     * 设置最后发送时间
+     */
     void updateLastSendAndHeard() {
         this.lastSend = now;
         this.lastHeard = now;
@@ -115,6 +120,11 @@ abstract class ClientCnxnSocket {
         incomingBuffer = ByteBuffer.allocate(len);
     }
 
+    /**
+     * 解析服务器返回消息
+     * 更新状态，服务器的超时事件，服务器只读状态
+     * 在eventThread  waitingEvents中加入一个事件
+     */
     void readConnectResult() throws IOException {
         if (LOG.isTraceEnabled()) {
             StringBuilder buf = new StringBuilder("0x[");
@@ -128,11 +138,13 @@ abstract class ClientCnxnSocket {
         ByteBufferInputStream bbis = new ByteBufferInputStream(incomingBuffer);
         BinaryInputArchive bbia = BinaryInputArchive.getArchive(bbis);
         ConnectResponse conRsp = new ConnectResponse();
+        //读取返回流中的超时时间，sessionid
         conRsp.deserialize(bbia, "connect");
 
         // read "is read-only" flag
         boolean isRO = false;
         try {
+            //服务端是否只读
             isRO = bbia.readBool("readOnly");
         } catch (IOException e) {
             // this is ok -- just a packet from an old server which
@@ -141,6 +153,7 @@ abstract class ClientCnxnSocket {
         }
 
         this.sessionId = conRsp.getSessionId();
+        //解析服务器返回消息
         sendThread.onConnected(conRsp.getTimeOut(), this.sessionId,
                 conRsp.getPasswd(), isRO);
     }

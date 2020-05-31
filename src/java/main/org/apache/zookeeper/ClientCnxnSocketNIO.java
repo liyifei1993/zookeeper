@@ -54,9 +54,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     }
     
     /**
-     * @return true if a packet was received
-     * @throws InterruptedException
-     * @throws IOException
+     * <p>处理服务端返回消息</p>
      */
     void doIO(List<Packet> pendingQueue, LinkedList<Packet> outgoingQueue, ClientCnxn cnxn)
       throws InterruptedException, IOException {
@@ -64,7 +62,8 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         if (sock == null) {
             throw new IOException("Socket is null!");
         }
-        if (sockKey.isReadable()) {
+        if (sockKey.isReadable()) {//服务器返回消息
+            //消息内容长度
             int rc = sock.read(incomingBuffer);
             if (rc < 0) {
                 throw new EndOfStreamException(
@@ -78,6 +77,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                     recvCount++;
                     readLength();
                 } else if (!initialized) {
+                    //解析服务端消息 ，在eventthread 阻塞队列中加入事件
                     readConnectResult();
                     enableRead();
                     if (findSendablePacket(outgoingQueue,
@@ -98,7 +98,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                 }
             }
         }
-        if (sockKey.isWritable()) {
+        if (sockKey.isWritable()) {//第二个消息，第一次服务端返回，发送消息
             synchronized(outgoingQueue) {
                 Packet p = findSendablePacket(outgoingQueue,
                         cnxn.sendThread.clientTunneledAuthenticationInProgress());
@@ -122,6 +122,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
                                 && p.requestHeader.getType() != OpCode.ping
                                 && p.requestHeader.getType() != OpCode.auth) {
                             synchronized (pendingQueue) {
+                                //把消息加入等待回应队列
                                 pendingQueue.add(p);
                             }
                         }
@@ -276,12 +277,14 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         sockKey = sock.register(selector, SelectionKey.OP_CONNECT);
         boolean immediateConnect = sock.connect(addr);
         if (immediateConnect) {
+            //连接成功后，重置watch？
             sendThread.primeConnection();
         }
     }
     
     @Override
     void connect(InetSocketAddress addr) throws IOException {
+        //创建一个socket通道
         SocketChannel sock = createSock();
         try {
            registerAndConnect(sock, addr);
@@ -341,7 +344,11 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
     synchronized void wakeupCnxn() {
         selector.wakeup();
     }
-    
+
+    /**
+     * <p>第一次进入，处理socket连接消息</p>
+     * <p>l连接成功，服务端返回一条消息？是什么消息</p>
+     */
     @Override
     void doTransport(int waitTimeOut, List<Packet> pendingQueue, LinkedList<Packet> outgoingQueue,
                      ClientCnxn cnxn)
@@ -357,12 +364,14 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
         updateNow();
         for (SelectionKey k : selected) {
             SocketChannel sc = ((SocketChannel) k.channel());
-            if ((k.readyOps() & SelectionKey.OP_CONNECT) != 0) {
+            if ((k.readyOps() & SelectionKey.OP_CONNECT) != 0) {//第一个消息，连接信息
                 if (sc.finishConnect()) {
                     updateLastSendAndHeard();
+                    //连接成功初始化  设置能读和写
                     sendThread.primeConnection();
                 }
-            } else if ((k.readyOps() & (SelectionKey.OP_READ | SelectionKey.OP_WRITE)) != 0) {
+            } else if ((k.readyOps() & (SelectionKey.OP_READ | SelectionKey.OP_WRITE)) != 0) {//第二个消息，只能写，服务端设置？
+                //处理服务返回的消息和发送消息
                 doIO(pendingQueue, outgoingQueue, cnxn);
             }
         }
@@ -370,6 +379,7 @@ public class ClientCnxnSocketNIO extends ClientCnxnSocket {
             synchronized(outgoingQueue) {
                 if (findSendablePacket(outgoingQueue,
                         cnxn.sendThread.clientTunneledAuthenticationInProgress()) != null) {
+                    //有消息需要发送
                     enableWrite();
                 }
             }

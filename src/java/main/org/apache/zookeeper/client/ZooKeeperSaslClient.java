@@ -54,14 +54,11 @@ public class ZooKeeperSaslClient {
     private static volatile boolean initializedLogin = false; 
 
     /**
-     * Returns true if the SASL client is enabled. By default, the client
-     * is enabled but can be disabled by setting the system property
-     * <code>zookeeper.sasl.client</code> to <code>false</code>. See
-     * ZOOKEEPER-1657 for more information.
-     *
-     * @return If the SASL client is enabled.
+     * 判断SASL是否使用
+     * <p>判断是否传入参数，未传入参数是取默认值 true</p>
      */
     public static boolean isEnabled() {
+        //属性设置为true,默认值ENABLE_CLIENT_SASL_DEFAULT
         return Boolean.valueOf(System.getProperty(ENABLE_CLIENT_SASL_KEY, ENABLE_CLIENT_SASL_DEFAULT));
     }
 

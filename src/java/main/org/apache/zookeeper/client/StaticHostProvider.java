@@ -32,12 +32,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Most simple HostProvider, resolves on every next() call.
- *
- * Please be aware that although this class doesn't do any DNS caching, there're multiple levels of caching already
- * present across the stack like in JVM, OS level, hardware, etc. The best we could do here is to get the most recent
- * address from the underlying system which is considered up-to-date.
- *
+ * 客户端连接服务端信息
+ * <p>包括服务端信息列表</p>
+ *<p>连接次数和最后一次连接成功时的次数</p>
  */
 @InterfaceAudience.Public
 public final class StaticHostProvider implements HostProvider {
@@ -50,19 +47,18 @@ public final class StaticHostProvider implements HostProvider {
 
     private final List<InetSocketAddress> serverAddresses = new ArrayList<InetSocketAddress>(5);
 
+    /**
+     * 最后一次连接成功时的次数
+     */
     private int lastIndex = -1;
 
+    //当前连接次数
     private int currentIndex = -1;
 
     private Resolver resolver;
 
     /**
-     * Constructs a SimpleHostSet.
-     *
-     * @param serverAddresses
-     *            possibly unresolved ZooKeeper server addresses
-     * @throws IllegalArgumentException
-     *             if serverAddresses is empty or resolves to an empty list
+     * 对服务器地址信息列表排序
      */
     public StaticHostProvider(Collection<InetSocketAddress> serverAddresses) {
         this.resolver = new Resolver() {
@@ -71,6 +67,7 @@ public final class StaticHostProvider implements HostProvider {
                 return InetAddress.getAllByName(name);
             }
         };
+        //服务器地址信息排序
         init(serverAddresses);
     }
 
@@ -91,16 +88,16 @@ public final class StaticHostProvider implements HostProvider {
     }
 
     /**
-     * Common init method for all constructors.
-     * Resolve all unresolved server addresses, put them in a list and shuffle.
+     * 持有一份地址信息列表，并且对地址信息排序
      */
     private void init(Collection<InetSocketAddress> serverAddresses) {
         if (serverAddresses.isEmpty()) {
             throw new IllegalArgumentException(
                     "A HostProvider may not be empty!");
         }
-
+        //地址信息列表
         this.serverAddresses.addAll(serverAddresses);
+        //随机排序
         Collections.shuffle(this.serverAddresses);
     }
 
@@ -146,6 +143,7 @@ public final class StaticHostProvider implements HostProvider {
     }
 
     public InetSocketAddress next(long spinDelay) {
+        //设置连接次数
         currentIndex = ++currentIndex % serverAddresses.size();
         if (currentIndex == lastIndex && spinDelay > 0) {
             try {
@@ -172,6 +170,9 @@ public final class StaticHostProvider implements HostProvider {
         }
     }
 
+    /**
+     * 连接成功，设置最后一次成功时的次数
+     */
     @Override
     public void onConnected() {
         lastIndex = currentIndex;

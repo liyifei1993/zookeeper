@@ -24,24 +24,19 @@ import java.util.ArrayList;
 import org.apache.zookeeper.common.PathUtils;
 
 /**
- * A parser for ZooKeeper Client connect strings.
- * 
- * This class is not meant to be seen or used outside of ZooKeeper itself.
- * 
- * The chrootPath member should be replaced by a Path object in issue
- * ZOOKEEPER-849.
- * 
- * @see org.apache.zookeeper.ZooKeeper
+ * 服务器地址信息解析
+ * <p>持有地址信息</p>
  */
 public final class ConnectStringParser {
     private static final int DEFAULT_PORT = 2181;
 
+    //服务器地址信息  地址是/时为null
     private final String chrootPath;
 
     private final ArrayList<InetSocketAddress> serverAddresses = new ArrayList<InetSocketAddress>();
 
     /**
-     * 
+     * 解析server参数，保存服务器地址信息
      * @throws IllegalArgumentException
      *             for an invalid chroot path.
      */
@@ -77,10 +72,18 @@ public final class ConnectStringParser {
         }
     }
 
+    /**
+     * 服务器地址信息  ？
+     * @return
+     */
     public String getChrootPath() {
         return chrootPath;
     }
 
+    /**
+     * 服务器地址信息
+     * <p>server参数以,分隔传入的列表</p>
+     */
     public ArrayList<InetSocketAddress> getServerAddresses() {
         return serverAddresses;
     }

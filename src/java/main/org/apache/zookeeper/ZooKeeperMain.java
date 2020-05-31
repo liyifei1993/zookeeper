@@ -19,6 +19,7 @@
 package org.apache.zookeeper;
 
 import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.lang.reflect.InvocationTargetException;
@@ -53,12 +54,16 @@ public class ZooKeeperMain {
     private static final Logger LOG = LoggerFactory.getLogger(ZooKeeperMain.class);
     static final Map<String,String> commandMap = new HashMap<String,String>( );
 
+    //启动类参数封装对象
+    //默认参数 server：localhost:2181   timeout：3000
+    //启动时传入会覆盖
     protected MyCommandOptions cl = new MyCommandOptions();
     protected HashMap<Integer,String> history = new HashMap<Integer,String>( );
     protected int commandCount = 0;
     protected boolean printWatches = true;
 
     protected ZooKeeper zk;
+    //服务的地址端口
     protected String host = "";
 
     public boolean getPrintWatches( ) {
@@ -96,6 +101,9 @@ public class ZooKeeperMain {
         }
     }
 
+    /**
+     * 默认wactch，只打印事件类型
+     */
     private class MyWatcher implements Watcher {
         public void process(WatchedEvent event) {
             if (getPrintWatches()) {
@@ -153,8 +161,14 @@ public class ZooKeeperMain {
      */
     static class MyCommandOptions {
 
+        //-server loclhost:2181
+        // -timeout 1000
+        //-r     readonly
+        //存放3个参数，传入启动类时必须是以上3个参数在前面，否则不起作用
         private Map<String,String> options = new HashMap<String,String>();
+        //存放除上面3个参数以外的其它参数，命令参数
         private List<String> cmdArgs = null;
+        //存放以上3个参数以外的第一个参数，客户端命令
         private String command = null;
         public static final Pattern ARGS_PATTERN = Pattern.compile("\\s*([^\"\']\\S*|\"[^\"]*\"|'[^']*')\\s*");
         public static final Pattern QUOTED_PATTERN = Pattern.compile("^([\'\"])(.*)(\\1)$");
@@ -185,10 +199,14 @@ public class ZooKeeperMain {
         }
 
         /**
-         * Parses a command line that may contain one or more flags
-         * before an optional command string
-         * @param args command line arguments
-         * @return true if parsing succeeded, false otherwise.
+         * <li>解析启动时传入的参数
+         * <li>server    服务端的地址和端口信息 格式： -server loclhost:2181
+         * <li>timeout  超时时间   格式； -timeout 1000
+         * <li>r       只读模式   格式 ： -r
+         * <li>这3个参数会放在options对象中
+         * <li>其它参数放在 cmdArgs 对象中
+         * @param args 启动类传入的参数
+         * @return true 默认返回true，报错返回false
          */
         public boolean parseOptions(String[] args) {
             List<String> argList = Arrays.asList(args);
@@ -211,6 +229,7 @@ public class ZooKeeperMain {
                 }
 
                 if (!opt.startsWith("-")) {
+                    //存放除了上面3个参数以外的第一个参数
                     command = opt;
                     cmdArgs = new ArrayList<String>( );
                     cmdArgs.add( command );
@@ -224,7 +243,7 @@ public class ZooKeeperMain {
         }
 
         /**
-         * Breaks a string into command + arguments.
+         * 处理cmd命令
          * @param cmdstring string of form "cmd arg1 arg2..etc"
          * @return true if parsing succeeded.
          */
@@ -273,12 +292,21 @@ public class ZooKeeperMain {
         System.out.println("\n"+msg);
     }
 
+
+    /**
+     * 连接zk服务端
+     * @param newHost 服务端的地址:端口
+     */
     protected void connectToZK(String newHost) throws InterruptedException, IOException {
+        //如果客户端已经启动过，先关闭
         if (zk != null && zk.getState().isAlive()) {
             zk.close();
         }
+        //设置服务的地址端口
         host = newHost;
+        //判断是否只读模式
         boolean readOnly = cl.getOption("readonly") != null;
+        //创建zk客户端类
         zk = new ZooKeeper(host,
                  Integer.parseInt(cl.getOption("timeout")),
                  new MyWatcher(), readOnly);
@@ -292,11 +320,11 @@ public class ZooKeeperMain {
     }
 
     public ZooKeeperMain(String args[]) throws IOException, InterruptedException {
+        //解析启动时传入的参数，设置 options ，command，cmdArgs 3个对象
         cl.parseOptions(args);
         System.out.println("Connecting to " + cl.getOption("server"));
+        //启动客户端   server：服务端的地址：端口
         connectToZK(cl.getOption("server"));
-        //zk = new ZooKeeper(cl.getOption("server"),
-//                Integer.parseInt(cl.getOption("timeout")), new MyWatcher());
     }
 
     public ZooKeeperMain(ZooKeeper zk) {
@@ -328,7 +356,13 @@ public class ZooKeeperMain {
 
                 String line;
                 Method readLine = consoleC.getMethod("readLine", String.class);
-                while ((line = (String)readLine.invoke(console, getPrompt())) != null) {
+//                while ((line = (String)readLine.invoke(console, getPrompt())) != null) {
+//                    executeLine(line);
+//                }
+                //接收控制台消息
+                BufferedReader bufferedReader=new BufferedReader(new InputStreamReader(System.in));
+                while ((line = bufferedReader.readLine()) != null) {
+                    //处理控制台消息
                     executeLine(line);
                 }
             } catch (ClassNotFoundException e) {
@@ -368,18 +402,23 @@ public class ZooKeeperMain {
     throws InterruptedException, IOException, KeeperException {
       if (!line.equals("")) {
         cl.parseCommand(line);
+        //添加操作历史
         addToHistory(commandCount,line);
+        //处理命令
         processCmd(cl);
+        //命令次数
         commandCount++;
       }
     }
 
     private static DataCallback dataCallback = new DataCallback() {
 
+        //打印获取到的数据
         public void processResult(int rc, String path, Object ctx, byte[] data,
                 Stat stat) {
             System.out.println("rc = " + rc + " path = " + path + " data = "
                     + (data == null ? "null" : new String(data)) + " stat = ");
+            //打印错误信息
             printStat(stat);
         }
 
@@ -623,6 +662,9 @@ public class ZooKeeperMain {
         return false;
     }
 
+    /**
+     * 处理zk命令
+     */
     protected boolean processZKCmd(MyCommandOptions co)
         throws KeeperException, IOException, InterruptedException
     {
@@ -644,11 +686,11 @@ public class ZooKeeperMain {
         List<ACL> acl = Ids.OPEN_ACL_UNSAFE;
         LOG.debug("Processing " + cmd);
 
-        if (cmd.equals("quit")) {
+        if (cmd.equals("quit")) {//退出
             System.out.println("Quitting...");
             zk.close();
             System.exit(0);
-        } else if (cmd.equals("redo") && args.length >= 2) {
+        } else if (cmd.equals("redo") && args.length >= 2) {//执行历史命令
             Integer i = Integer.decode(args[1]);
             if (commandCount <= i || i < 0){ // don't allow redoing this redo
                 System.out.println("Command index out of range");
@@ -661,7 +703,7 @@ public class ZooKeeperMain {
             }
             history.put(commandCount, history.get(i));
             processCmd( cl);
-        } else if (cmd.equals("history")) {
+        } else if (cmd.equals("history")) {//显示历史命令
             for (int i=commandCount - 10;i<=commandCount;++i) {
                 if (i < 0) continue;
                 System.out.println(i + " - " + history.get(i));
@@ -672,7 +714,7 @@ public class ZooKeeperMain {
             } else {
                 printWatches = args[1].equals("on");
             }
-        } else if (cmd.equals("connect")) {
+        } else if (cmd.equals("connect")) {//重新连接
             if (args.length >=2) {
                 connectToZK(args[1]);
             } else {

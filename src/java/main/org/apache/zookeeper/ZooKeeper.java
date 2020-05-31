@@ -38,51 +38,7 @@ import java.net.SocketAddress;
 import java.util.*;
 
 /**
- * This is the main class of ZooKeeper client library. To use a ZooKeeper
- * service, an application must first instantiate an object of ZooKeeper class.
- * All the iterations will be done by calling the methods of ZooKeeper class.
- * The methods of this class are thread-safe unless otherwise noted.
- * <p>
- * Once a connection to a server is established, a session ID is assigned to the
- * client. The client will send heart beats to the server periodically to keep
- * the session valid.
- * <p>
- * The application can call ZooKeeper APIs through a client as long as the
- * session ID of the client remains valid.
- * <p>
- * If for some reason, the client fails to send heart beats to the server for a
- * prolonged period of time (exceeding the sessionTimeout value, for instance),
- * the server will expire the session, and the session ID will become invalid.
- * The client object will no longer be usable. To make ZooKeeper API calls, the
- * application must create a new client object.
- * <p>
- * If the ZooKeeper server the client currently connects to fails or otherwise
- * does not respond, the client will automatically try to connect to another
- * server before its session ID expires. If successful, the application can
- * continue to use the client.
- * <p>
- * The ZooKeeper API methods are either synchronous or asynchronous. Synchronous
- * methods blocks until the server has responded. Asynchronous methods just queue
- * the request for sending and return immediately. They take a callback object that
- * will be executed either on successful execution of the request or on error with
- * an appropriate return code (rc) indicating the error.
- * <p>
- * Some successful ZooKeeper API calls can leave watches on the "data nodes" in
- * the ZooKeeper server. Other successful ZooKeeper API calls can trigger those
- * watches. Once a watch is triggered, an event will be delivered to the client
- * which left the watch at the first place. Each watch can be triggered only
- * once. Thus, up to one event will be delivered to a client for every watch it
- * leaves.
- * <p>
- * A client needs an object of a class implementing Watcher interface for
- * processing the events delivered to the client.
- *
- * When a client drops the current connection and re-connects to a server, all the
- * existing watches are considered as being triggered but the undelivered events
- * are lost. To emulate this, the client will generate a special event to tell
- * the event handler a connection has been dropped. This special event has
- * EventType None and KeeperState Disconnected.
- *
+ * zk客户端
  */
 @InterfaceAudience.Public
 public class ZooKeeper {
@@ -318,13 +274,18 @@ public class ZooKeeper {
 
     @InterfaceAudience.Public
     public enum States {
-        CONNECTING, ASSOCIATING, CONNECTED, CONNECTEDREADONLY,
-        CLOSED, AUTH_FAILED, NOT_CONNECTED;
+        CONNECTING("连接中"), ASSOCIATING, CONNECTED, CONNECTEDREADONLY,
+        CLOSED, AUTH_FAILED, NOT_CONNECTED("未连接");
 
         public boolean isAlive() {
             return this != CLOSED && this != AUTH_FAILED;
         }
+         States(String name){
 
+        }
+        States(){
+
+        }
         /**
          * Returns whether we are connected to a server (which
          * could possibly be read-only, if this client is allowed
@@ -385,55 +346,12 @@ public class ZooKeeper {
     }
 
     /**
-     * To create a ZooKeeper client object, the application needs to pass a
-     * connection string containing a comma separated list of host:port pairs,
-     * each corresponding to a ZooKeeper server.
-     * <p>
-     * Session establishment is asynchronous. This constructor will initiate
-     * connection to the server and return immediately - potentially (usually)
-     * before the session is fully established. The watcher argument specifies
-     * the watcher that will be notified of any changes in state. This
-     * notification can come at any point before or after the constructor call
-     * has returned.
-     * <p>
-     * The instantiated ZooKeeper client object will pick an arbitrary server
-     * from the connectString and attempt to connect to it. If establishment of
-     * the connection fails, another server in the connect string will be tried
-     * (the order is non-deterministic, as we random shuffle the list), until a
-     * connection is established. The client will continue attempts until the
-     * session is explicitly closed.
-     * <p>
-     * Added in 3.2.0: An optional "chroot" suffix may also be appended to the
-     * connection string. This will run the client commands while interpreting
-     * all paths relative to this root (similar to the unix chroot command).
+     *<p>创建一个zk客户端</p>
      *
-     * @param connectString
-     *            comma separated host:port pairs, each corresponding to a zk
-     *            server. e.g. "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002" If
-     *            the optional chroot suffix is used the example would look
-     *            like: "127.0.0.1:3000,127.0.0.1:3001,127.0.0.1:3002/app/a"
-     *            where the client would be rooted at "/app/a" and all paths
-     *            would be relative to this root - ie getting/setting/etc...
-     *            "/foo/bar" would result in operations being run on
-     *            "/app/a/foo/bar" (from the server perspective).
-     * @param sessionTimeout
-     *            session timeout in milliseconds
+     * @param connectString 服务端地址:端口
+     * @param  sessionTimeout  超时时间
      * @param watcher
-     *            a watcher object which will be notified of state changes, may
-     *            also be notified for node events
-     * @param canBeReadOnly
-     *            (added in 3.4) whether the created client is allowed to go to
-     *            read-only mode in case of partitioning. Read-only mode
-     *            basically means that if the client can't find any majority
-     *            servers but there's partitioned server it could reach, it
-     *            connects to one in read-only mode, i.e. read requests are
-     *            allowed while write requests are not. It continues seeking for
-     *            majority in the background.
-     *
-     * @throws IOException
-     *             in cases of network failure
-     * @throws IllegalArgumentException
-     *             if an invalid chroot path is specified
+     * @param canBeReadOnly  是否只读
      */
     public ZooKeeper(String connectString, int sessionTimeout, Watcher watcher,
             boolean canBeReadOnly)
@@ -444,13 +362,17 @@ public class ZooKeeper {
 
         watchManager.defaultWatcher = watcher;
 
+        //服务器地址信息
         ConnectStringParser connectStringParser = new ConnectStringParser(
                 connectString);
+        //服务器地址信息排序
         HostProvider hostProvider = new StaticHostProvider(
                 connectStringParser.getServerAddresses());
+        //创建连接管理对象
         cnxn = new ClientCnxn(connectStringParser.getChrootPath(),
                 hostProvider, sessionTimeout, this, watchManager,
                 getClientCnxnSocket(), canBeReadOnly);
+        //消息发送线程，事件处理线程
         cnxn.start();
     }
 
@@ -1838,6 +1760,12 @@ public class ZooKeeper {
         return cnxn.sendThread.getClientCnxnSocket().getLocalSocketAddress();
     }
 
+    /**
+     * 初始化一个socket客户端
+     * <p>默认对象：org.apache.zookeeper.ClientCnxnSocketNIO,
+     * 可以设置系统属性zookeeper.clientCnxnSocket改变客户端的类</p>
+     *
+     */
     private static ClientCnxnSocket getClientCnxnSocket() throws IOException {
         String clientCnxnSocketName = System
                 .getProperty(ZOOKEEPER_CLIENT_CNXN_SOCKET);
